@@ -38,30 +38,25 @@ def region_of_interest(img, vertices):
     formed from `vertices`. The rest of the image is set to black.
     `vertices` should be a numpy array of integer points.
     """
-    #defining coordinates of the triangular mask
-    left_bottom = vertices[0]
-    right_bottom= vertices[1]
-    apex = vertices[2]
-    #defining image co-ordinates
-    ysize = img.shape[0]
-    xsize = img.shape[1]
-    #defining triangle
-    fit_left = np.polyfit((left_bottom[0], apex[0]), (left_bottom[1], apex[1]), 1)
-    fit_right = np.polyfit((right_bottom[0], apex[0]), (right_bottom[1], apex[1]), 1)
-    fit_bottom = np.polyfit((left_bottom[0], right_bottom[0]), (left_bottom[1], right_bottom[1]), 1)
-
-    XX, YY = np.meshgrid(np.arange(0, xsize), np.arange(0, ysize))
-    #triangle in image
-    region_thresholds = (YY > (XX*fit_left[0] + fit_left[1])) & \
-                        (YY > (XX*fit_right[0] + fit_right[1])) & \
-                        (YY < (XX*fit_bottom[0] + fit_bottom[1]))
-
-    region_thresholds=np.multiply(region_thresholds,1)                    
-    masked_image=(img*region_thresholds).astype(np.uint8)
+    #defining a blank mask to start with
+    mask = np.zeros_like(img)   
+    
+    #defining a 3 channel or 1 channel color to fill the mask with depending on the input image
+    if len(img.shape) > 2:
+        channel_count = img.shape[2]  # i.e. 3 or 4 depending on your image
+        ignore_mask_color = (255,) * channel_count
+    else:
+        ignore_mask_color = 255
+        
+    #filling pixels inside the polygon defined by "vertices" with the fill color    
+    cv2.fillPoly(mask, vertices, ignore_mask_color)
+    
+    #returning the image only where mask pixels are nonzero
+    masked_image = cv2.bitwise_and(img, mask)
     return masked_image
 
 
-def draw_lines(img, lines, color=[255, 0, 0], thickness=2):
+def draw_lines(img, lines, color=[255, 0, 0], thickness=10):
     """
     NOTE: this is the function you might want to use as a starting point once you want to 
     average/extrapolate the line segments you detect to map out the full
@@ -88,9 +83,16 @@ def hough_lines(img, rho, theta, threshold, min_line_len, max_line_gap):
         
     Returns an image with hough lines drawn.
     """
-    lines = cv2.HoughLinesP(img, cv2.HOUGH_PROBABILISTIC, rho, theta, threshold, np.array([]), minLineLength=min_line_len, maxLineGap=max_line_gap)
+    lines = cv2.HoughLinesP(img, rho, theta, threshold, cv2.HOUGH_PROBABILISTIC, minLineLength=min_line_len, maxLineGap=max_line_gap)
+    #lines = cv2.HoughLinesP(img, rho, theta, threshold, np.array([]), min_line_len, max_line_gap)
+    #edges,cv2.HOUGH_PROBABILISTIC, np.pi/180, 30, minLineLength,maxLineGap
     line_img = np.zeros((img.shape[0], img.shape[1], 3), dtype=np.uint8)
-    draw_lines(line_img, lines)
+    #draw_lines(line_img, lines)
+    try:
+        draw_lines(line_img, lines)
+    except:
+        print ("error "+str(IOError))
+        pass
     return line_img
 
 # Python 3 has support for cool math symbols.
@@ -108,3 +110,11 @@ def weighted_img(img, initial_img, α=0.8, β=1., γ=0.):
     NOTE: initial_img and img must be the same shape!
     """
     return cv2.addWeighted(initial_img, α, img, β, γ)
+
+#color select code instead of edges
+def color_select(threshold,image):
+    thresholds = (image[:,:] < threshold)
+    #returns a booleanmap of all pixel values greater than threshold
+    image[thresholds] = 0
+    #removes all lesser pixel values from image
+    return image
